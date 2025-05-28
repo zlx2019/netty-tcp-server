@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: netty-tcp-server
+
+netty:
+  tcp:
+    port: 9879
