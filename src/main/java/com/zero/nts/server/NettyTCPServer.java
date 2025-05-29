@@ -2,6 +2,7 @@ package com.zero.nts.server;
 
 import com.zero.nts.codec.EasyDecoder;
 import com.zero.nts.codec.EasyEncoder;
+import com.zero.nts.config.NettyProperties;
 import com.zero.nts.server.handler.EasyServerHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -13,10 +14,9 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.CompletableFuture;
@@ -30,15 +30,10 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class NettyTCPServer {
-    @Value("${netty.tcp.port}")
-    private int serverPort;
-    @Autowired
-    private EasyServerHandler serverHandler;
-
-    private boolean keepAlive = true;
-    private int backlog = 128;
-    private int connectTimeout = 3000;
+    private final EasyServerHandler serverHandler;
+    private final NettyProperties properties;
 
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
@@ -53,11 +48,13 @@ public class NettyTCPServer {
         bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
                 // 连接等待队列大小
-                .option(ChannelOption.SO_BACKLOG, backlog)
+                .option(ChannelOption.SO_BACKLOG, properties.getBacklog())
                 // 连接超时时长
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) properties.getConnectTimeout().toMillis())
                 // 启用TCP心跳机制
-                .childOption(ChannelOption.SO_KEEPALIVE, keepAlive)
+                .childOption(ChannelOption.SO_KEEPALIVE, properties.getKeepAlive())
+                .childOption(ChannelOption.TCP_NODELAY, properties.getNoDelay())
+                // 设置日志级别
                 .handler(new LoggingHandler(LogLevel.INFO))
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
@@ -67,31 +64,27 @@ public class NettyTCPServer {
                                 .addLast(new EasyEncoder()) // 编码器
                                 // 添加空闲事件器，channel 空闲10秒后将发送 IdleStateEvent 事件
                                 .addLast(new IdleStateHandler(0, 0, 10, TimeUnit.SECONDS))
-                                .addLast(serverHandler)   // Channel 处理器
-                                .addLast();
+                                .addLast(serverHandler);   // Channel 处理器
                     }
                 });
         try {
-            // 绑定地址
-            ChannelFuture future = bootstrap.bind(serverPort).sync();
-            future.addListener(cf -> {
-                if (cf.isSuccess()){
-                    log.info("[NettyTCPServer] Server started on port {}", serverPort);
+            // 绑定地址并启动服务
+            ChannelFuture server = bootstrap.bind(properties.getAddress()).sync().addListener(future -> {
+                if (future.isSuccess()){
+                    log.info("[NettyTCPServer] Server started on port {}", properties.getAddress());
                 }
             });
-
-            // 异步启动Netty服务
-            serverChannel = future.channel();
+            serverChannel = server.channel();
+            // 异步启动Netty服务,避免阻塞程序启动
             CompletableFuture.runAsync(()-> {
                 try {
-                    serverChannel.closeFuture().sync().addListener(cf-> {
-                        log.info("[NettyTCPServer] Server closed");
+                    serverChannel.closeFuture().sync().addListener(future-> {
+                        log.info("[NettyTCPServer] server channel closed");
                     });
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             });
-
         } catch (InterruptedException e) {
             stop();
             throw new BeanCreationException("[NettyTCPServer] Startup failed", e);

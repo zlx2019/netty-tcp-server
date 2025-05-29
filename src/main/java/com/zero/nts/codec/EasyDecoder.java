@@ -1,6 +1,8 @@
 package com.zero.nts.codec;
 
 import com.zero.nts.message.EasyMessage;
+import com.zero.nts.message.MessageType;
+import com.zero.nts.message.MessageVersion;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
@@ -16,12 +18,11 @@ import java.util.List;
  */
 @Slf4j
 public class EasyDecoder extends ByteToMessageDecoder {
-    private  final int MESSAGE_FIXED_HEADER_SIZE = 8;
     private final int MESSAGE_MAX_SIZE = 1024 * 1024 * 1024;
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-        if (in.readableBytes() < MESSAGE_FIXED_HEADER_SIZE) {
+        if (in.readableBytes() < EasyMessage.MESSAGE_FIXED_SIZE) {
             return;
         }
         // 标记读取位置,方便后续回滚
@@ -32,6 +33,8 @@ public class EasyDecoder extends ByteToMessageDecoder {
         char magic = in.readChar();
         byte version = in.readByte();
         byte type = in.readByte();
+        long id = in.readLong();
+        long timestamp = in.readLong();
         int length = in.readInt();
 
         // 校验数据包长度
@@ -54,7 +57,7 @@ public class EasyDecoder extends ByteToMessageDecoder {
             payload = new byte[length];
             in.readBytes(payload);
         }
-        EasyMessage message = new EasyMessage(magic, version, type, length, payload);
+        EasyMessage message = new EasyMessage(magic, MessageVersion.fromVersion(version), MessageType.fromType(type), id, timestamp, length, payload);
         out.add(message);
     }
 }

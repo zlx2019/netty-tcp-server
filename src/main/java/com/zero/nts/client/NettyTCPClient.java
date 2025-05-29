@@ -4,6 +4,8 @@ import com.zero.nts.client.handler.EasyClientHandler;
 import com.zero.nts.codec.EasyDecoder;
 import com.zero.nts.codec.EasyEncoder;
 import com.zero.nts.message.EasyMessage;
+import com.zero.nts.message.MessageType;
+import com.zero.nts.message.MessageVersion;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -86,8 +88,10 @@ public class NettyTCPClient {
             return;
         }
         EasyMessage message = new EasyMessage();
-        message.setVersion((byte) 1);
-        message.setType((byte) 1);
+        message.setVersion(MessageVersion.V1);
+        message.setType(MessageType.NORMAL);
+        message.setId(1001);
+        message.setTimestamp(System.currentTimeMillis());
         byte[] payload = content.getBytes(StandardCharsets.UTF_8);
         message.setLength(payload.length);
         message.setData(payload);

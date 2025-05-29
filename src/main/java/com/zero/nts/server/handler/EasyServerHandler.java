@@ -1,6 +1,8 @@
 package com.zero.nts.server.handler;
 
 import com.zero.nts.message.EasyMessage;
+import com.zero.nts.message.MessageType;
+import com.zero.nts.message.MessageVersion;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -31,13 +33,13 @@ public class EasyServerHandler extends SimpleChannelInboundHandler<EasyMessage> 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, EasyMessage message) throws Exception {
         log.info("读取到消息: {}, payload: {}", message, new String(message.getData(), StandardCharsets.UTF_8));
-        byte type = message.getType();
+        MessageType type = message.getType();
 
         // 响应消息
         EasyMessage respMsg = new EasyMessage();
         respMsg.setMagic('@');
-        respMsg.setVersion((byte) 1);
-        respMsg.setType((byte) 2);
+        respMsg.setVersion(MessageVersion.V1);
+        respMsg.setType(MessageType.NORMAL);
         byte[] bytes = "Response".getBytes(StandardCharsets.UTF_8);
         respMsg.setLength(bytes.length);
         respMsg.setData(bytes);
@@ -68,7 +70,7 @@ public class EasyServerHandler extends SimpleChannelInboundHandler<EasyMessage> 
      */
     @Override
     public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-        log.info("[ServerHandler] channel logout of event-loop");
+        log.info("[ServerHandler] client channel remove from the event-loop");
     }
 
     /**
