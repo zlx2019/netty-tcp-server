@@ -7,6 +7,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,8 +33,17 @@ public class EasyServerHandler extends SimpleChannelInboundHandler<EasyMessage> 
      */
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, EasyMessage message) throws Exception {
-        log.info("读取到消息: {}, payload: {}", message, new String(message.getData(), StandardCharsets.UTF_8));
         MessageType type = message.getType();
+        switch (type){
+            case NORMAL -> {
+                String payload = new String(message.getData(), StandardCharsets.UTF_8);
+                log.info("[{}]: {}", ctx.channel().remoteAddress(), payload);
+            }
+            case HEART_BEAT -> {
+                log.info("[HEARTBEAT] {}", ctx.channel().remoteAddress());
+                return;
+            }
+        }
 
         // 响应消息
         EasyMessage respMsg = new EasyMessage();
@@ -118,7 +128,13 @@ public class EasyServerHandler extends SimpleChannelInboundHandler<EasyMessage> 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         log.info("[ServerHandler] channel: {} event triggered: {}", ctx.channel().remoteAddress(), evt);
-        super.userEventTriggered(ctx, evt);
+        if (evt instanceof IdleStateEvent) {
+            // 超时
+            ctx.close();
+            return;
+        }else {
+            super.userEventTriggered(ctx, evt);
+        }
     }
 
 
